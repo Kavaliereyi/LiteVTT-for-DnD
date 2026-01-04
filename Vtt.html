@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>DND 地图工具 - v13 稳定测距版</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #202020; font-family: "Microsoft YaHei", sans-serif; user-select: none; }
+        
+        /* 工具栏样式保持 v12.0 原样 */
+        #toolbar {
+            position: absolute; top: 0; left: 0; right: 0; padding: 5px;
+            background: rgba(30, 30, 30, 0.98); color: #ddd;
+            display: flex; flex-wrap: wrap; gap: 5px; align-items: center; z-index: 1000;
+            border-bottom: 1px solid #555; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .group { display: flex; align-items: center; gap: 3px; background: #3a3a3a; padding: 2px 6px; border-radius: 4px; border: 1px solid #555; }
+        .group.disabled { opacity: 0.4; pointer-events: none; filter: grayscale(1); }
+        .group-label { font-size: 10px; color: #aaa; margin-right: 4px; font-weight: bold; text-transform: uppercase; }
+        
+        button, label.btn {
+            background: #505050; border: 1px solid #666; color: #fff; padding: 0 8px;
+            border-radius: 3px; cursor: pointer; font-size: 12px; height: 24px; line-height: 22px;
+            display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+        }
+        button:hover, label.btn:hover { background: #666; border-color: #888; }
+        button.active { background: #3498db; border-color: #2980b9; color: white; }
+        
+        .btn-green { background: #27ae60; border-color: #2ecc71; }
+        .btn-red { background: #c0392b; border-color: #e74c3c; }
+        .btn-gold { background: #d35400; border-color: #e67e22; } 
+        .btn-purple { background: #8e44ad; border-color: #9b59b6; }
+
+        input[type="file"] { display: none; }
+        input[type="range"] { width: 50px; margin: 0 5px; height: 4px; cursor: pointer; }
+        input[type="color"] { width: 20px; height: 20px; border: none; padding: 0; background: none; cursor: pointer; }
+        .val-text { color: #f1c40f; font-weight: bold; min-width: 20px; text-align: center; font-size: 11px; }
+
+        canvas { display: block; touch-action: none; cursor: crosshair; }
+
+        #scene-bar { display: flex; gap: 2px; overflow-x: auto; max-width: 300px; }
+        .scene-tab { font-size: 11px; padding: 0 6px; opacity: 0.7; cursor: pointer; color: #aaa; border-bottom: 2px solid transparent; }
+        .scene-tab:hover { color: #fff; background: #444; }
+        .scene-tab.active { opacity: 1; border-bottom: 2px solid #f1c40f; background: #555; color: #fff; font-weight: bold; }
+
+        #context-menu {
+            position: absolute; display: none; z-index: 2000;
+            background: #2c3e50; border: 1px solid #444; border-radius: 6px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); padding: 8px;
+            width: 260px;
+        }
+        #context-menu h4 { margin: 0 0 8px 0; font-size: 14px; color: #ecf0f1; border-bottom: 1px solid #555; padding-bottom: 4px; }
+        
+        .hp-control { display: flex; gap: 5px; margin-bottom: 8px; background: #222; padding: 4px; border-radius: 4px; }
+        .hp-input-group { display: flex; flex-direction: column; width: 50%; }
+        .hp-input-group label { font-size: 9px; color: #aaa; }
+        .hp-input-group input { background: #444; border: 1px solid #555; color: #fff; width: 100%; box-sizing: border-box; font-size: 12px; padding: 2px; }
+
+        .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+        .status-btn {
+            display: flex; align-items: center; justify-content: start; gap: 4px;
+            font-size: 11px; padding: 4px; background: #34495e; border: 1px solid #444; width: 100%; box-sizing: border-box;
+        }
+        .status-btn.active { background: #27ae60; border-color: #2ecc71; }
+        
+        #measure-tooltip {
+            position: absolute; display: none; pointer-events: none;
+            background: rgba(0, 0, 0, 0.9); color: #f1c40f; padding: 6px 10px;
+            border-radius: 4px; font-size: 14px; font-weight: bold; border: 1px solid #f1c40f; 
+            z-index: 3000; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+<div id="toolbar">
+    <div class="group">
+        <button onclick="saveAllData()" class="btn-green" title="保存所有场景">💾 保存</button>
+        <label class="btn btn-green" for="loadState" title="读取战役文件">📂 读取</label> 
+        <input type="file" id="loadState" accept=".json">
+    </div>
+
+    <div class="group" style="border-color: #9b59b6;">
+        <span class="group-label" style="color:#d2a4eb">场景</span>
+        <div id="scene-bar"></div>
+        <button onclick="addNewScene()" class="btn-purple" title="新建">+</button>
+        <button onclick="deleteCurrentScene()" class="btn-red" title="删除">×</button>
+    </div>
+
+    <div class="group">
+        <label class="btn" for="mapUpload">🖼️ 地图</label> <input type="file" id="mapUpload" accept="image/*">
+        <label class="btn" for="tokenUpload">♟️ 角色</label> <input type="file" id="tokenUpload" accept="image/*">
+    </div>
+
+    <div class="group">
+        <button id="m-move" class="active" onclick="setMode('move')" title="移动 (Shift测距)">✋ 移动</button>
+        <button id="m-fog" onclick="setMode('fog')">☁️ 擦雾</button>
+        <button id="m-add" onclick="setMode('fog-add')">⬛ 补雾</button>
+    </div>
+
+    <div class="group">
+        <span class="group-label" style="color:#e056fd">法术</span>
+        <button id="m-spell-grid" onclick="setMode('spell-grid')">🔲</button>
+        <button id="m-spell-free" onclick="setMode('spell-free')">🔵</button>
+        <input type="color" id="spellColor" value="#ff4500">
+        <button onclick="clearSpells()">❌</button>
+    </div>
+
+    <div class="group">
+        <button id="shape-rect" class="active" onclick="setShape('rect')">⬜</button>
+        <button id="shape-circle" onclick="setShape('circle')">⚪</button>
+        <input type="range" id="brushSize" min="0.5" max="8.0" step="0.5" value="1.0" oninput="updateUI()">
+        <span id="brushVal" class="val-text">1.0x</span>
+    </div>
+
+    <div id="token-tools" class="group disabled">
+        <span class="group-label" style="color:#f1c40f">选中</span>
+        <button onclick="setTokenSize(1)">1x</button>
+        <button onclick="setTokenSize(2)">2x</button>
+        <button onclick="setTokenSize(3)">3x</button>
+        <button class="btn-red" onclick="deleteToken()">🗑️</button>
+    </div>
+
+    <div class="group">
+        <button class="btn-gold" onclick="nextRound()" title="状态时间-1">⏳ 下一轮</button>
+    </div>
+    
+    <div class="group">
+        <span class="group-label">网格</span>
+        <button onclick="adjGrid(-1)" title="减小格子">-</button>
+        <span id="gridInfo" class="val-text">50</span>
+        <button onclick="adjGrid(1)" title="增大格子">+</button>
+        <span style="border-left:1px solid #666; height:14px; margin:0 4px;"></span>
+        <span class="group-label" style="color:#3498db">速度</span>
+        <button id="step-1" class="active" onclick="setStep(1)">1</button>
+        <button id="step-10" onclick="setStep(10)">10</button>
+        <button id="step-50" onclick="setStep(50)">50</button>
+        <span style="border-left:1px solid #666; height:14px; margin:0 4px;"></span>
+        <button onclick="adjOffset('x',-1)">⬅</button>
+        <button onclick="adjOffset('x',1)">➡</button>
+        <button onclick="adjOffset('y',-1)">⬆</button>
+        <button onclick="adjOffset('y',1)">⬇</button>
+    </div>
+    
+    <div class="group">
+        <button onclick="resetView()">📍</button>
+        <span style="font-size:10px; color:#aaa">👁️</span>
+        <input type="range" id="fogAlpha" min="0" max="1" step="0.1" value="1" oninput="requestRender()">
+    </div>
+</div>
+
+<canvas id="canvas"></canvas>
+<div id="measure-tooltip">30 ft</div>
+
+<div id="context-menu">
+    <h4 id="menu-title">角色面板</h4>
+    <div class="hp-control">
+        <div class="hp-input-group">
+            <label>当前 HP</label> <input type="number" id="hp-current" onchange="updateTokenHP()">
+        </div>
+        <div class="hp-input-group">
+            <label>最大 HP</label> <input type="number" id="hp-max" onchange="updateTokenHP()">
+        </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:5px; margin-bottom:5px; font-size:12px; color:#ccc;">
+        <span>状态持续(轮):</span>
+        <input type="number" id="status-duration" value="10" min="1" style="width:40px; background:#222; border:1px solid #555; color:white;">
+    </div>
+    <div class="status-grid" id="status-list"></div>
+</div>
+
+<script>
+    const cvs = document.getElementById('canvas');
+    const ctx = cvs.getContext('2d');
+    const tooltip = document.getElementById('measure-tooltip');
+    
+    // 状态定义
+const STATUS_TYPES = [
+        { key: 'blinded', label: '目盲', icon: '🙈' },
+        { key: 'grappled', label: '受擒', icon: '✋' },
+        { key: 'poisoned', label: '中毒', icon: '🤢' },
+        { key: 'charmed', label: '魅惑', icon: '💖' },
+        { key: 'incapacitated', label: '失能', icon: '🤕' },
+        { key: 'prone', label: '倒地', icon: '🛌' },
+        { key: 'deafened', label: '耳聋', icon: '🙉' },
+        { key: 'invisible', label: '隐形', icon: '👻' },
+        { key: 'restrained', label: '束缚', icon: '⛓️' },
+        { key: 'exhaustion', label: '力竭', icon: '😩' },
+        { key: 'paralyzed', label: '麻痹', icon: '⚡' },
+        { key: 'stunned', label: '震慑', icon: '💫' },
+        { key: 'frightened', label: '恐慌', icon: '😱' },
+        { key: 'petrified', label: '石化', icon: '🗿' },
+        { key: 'unconscious', label: '昏迷', icon: '💤' }
+    ];
+
+    // 核心变量
+    let scenes = []; let activeSceneIdx = 0; 
+    let mapImg = null;
+    let tokens = []; let spells = []; 
+    let selectedToken = null; let rightClickToken = null; let dragToken = null;
+    
+    let mode = 'move'; let fogShape = 'rect';
+    let view = { x: 0, y: 0, scale: 1 };
+    let panning = false, lastPos = {x:0, y:0};
+    
+    let gridSize = 50, offX = 0, offY = 0, moveStep = 1;
+
+    let isMeasuring = false, measureStart = null;
+    let snappedMousePos = null; // 仅用于测距终点计算
+    
+    const fogCvs = document.createElement('canvas');
+    const fogCtx = fogCvs.getContext('2d');
+    let renderRequested = false;
+
+    // === 渲染防抖 ===
+    function requestRender() {
+        if (!renderRequested) {
+            renderRequested = true;
+            requestAnimationFrame(() => { draw(); renderRequested = false; });
+        }
+    }
+
+    // === 初始化 ===
+    function init() {
+        fogCvs.width = 2000; fogCvs.height = 2000;
+        fogCtx.fillStyle = 'black'; fogCtx.fillRect(0,0,2000,2000);
+        
+        const list = document.getElementById('status-list');
+        STATUS_TYPES.forEach(s => {
+            const btn = document.createElement('button');
+            btn.className = 'status-btn';
+            btn.innerHTML = `<span>${s.icon}</span> ${s.label}`;
+            btn.onclick = () => toggleStatus(s.key);
+            btn.dataset.key = s.key; list.appendChild(btn);
+        });
+
+        scenes = [{ id: Date.now(), name: "场景 1", data: null }];
+        updateSceneBar();
+        window.addEventListener('resize', resize);
+        resize();
+    }
+    function resize() { cvs.width = window.innerWidth; cvs.height = window.innerHeight; requestRender(); }
+
+    // === 坐标工具 ===
+    function s2w(sx, sy) { return { x: (sx - view.x)/view.scale, y: (sy - view.y)/view.scale }; }
+    function getSnapCenter(rawX, rawY) {
+        const gx = Math.floor((rawX - offX) / gridSize);
+        const gy = Math.floor((rawY - offY) / gridSize);
+        return { x: gx * gridSize + offX + gridSize / 2, y: gy * gridSize + offY + gridSize / 2 };
+    }
+
+    // === 核心绘制 (重点修改区域) ===
+    function draw() {
+        ctx.fillStyle = '#202020'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.save();
+        ctx.translate(view.x, view.y); ctx.scale(view.scale, view.scale);
+        
+        // 1. 地图
+        if (mapImg) ctx.drawImage(mapImg, 0, 0);
+        else { ctx.fillStyle = '#555'; ctx.font='20px sans-serif'; ctx.fillText(`[${scenes[activeSceneIdx].name}] 请上传地图`, 100, 100); }
+
+        // 2. 网格
+        drawGrid();
+
+        // 3. 法术
+        spells.forEach(s => {
+            ctx.save();
+            ctx.fillStyle = s.color; ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            if (s.type === 'grid') { 
+                ctx.fillRect(s.x-s.size/2, s.y-s.size/2, s.size, s.size); 
+                ctx.globalAlpha=0.8; ctx.strokeStyle=s.color; ctx.lineWidth=2/view.scale; 
+                ctx.strokeRect(s.x-s.size/2, s.y-s.size/2, s.size, s.size); 
+            } else { 
+                ctx.arc(s.x, s.y, s.size/2, 0, Math.PI*2); ctx.fill(); 
+                ctx.globalAlpha=0.8; ctx.strokeStyle=s.color; ctx.lineWidth=2/view.scale; ctx.stroke(); 
+            }
+            ctx.restore();
+        });
+
+        // 4. 角色
+        tokens.forEach(t => {
+            ctx.save();
+            const s = gridSize * (t.sizeMult || 1);
+            if(t.statuses && t.statuses.find(st => st.key === 'invisible')) ctx.globalAlpha = 0.5;
+
+            // 头像
+            ctx.beginPath(); ctx.arc(t.x+s/2, t.y+s/2, s/2, 0, Math.PI*2); ctx.clip();
+            ctx.drawImage(t.img, t.x, t.y, s, s);
+            ctx.restore(); 
+            
+            // 选中圈
+            if(t === selectedToken) {
+                ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 4/view.scale;
+                ctx.beginPath(); ctx.arc(t.x+s/2, t.y+s/2, s/2, 0, Math.PI*2); ctx.stroke();
+            }
+
+            // 血条
+            if(t.maxHp > 0) {
+                const hpPct = Math.max(0, Math.min(1, (t.curHp || 0) / t.maxHp));
+                const barW = s * 0.8; const barH = 6 / view.scale;
+                const barX = t.x + (s - barW)/2; const barY = t.y - barH - 2;
+                ctx.fillStyle = 'red'; ctx.fillRect(barX, barY, barW, barH);
+                ctx.fillStyle = '#2ecc71'; ctx.fillRect(barX, barY, barW * hpPct, barH);
+                ctx.strokeStyle = 'black'; ctx.lineWidth = 1/view.scale; ctx.strokeRect(barX, barY, barW, barH);
+            }
+
+            // === 状态栏 (全新重写：下方、换行、适度重叠) ===
+            if(t.statuses && t.statuses.length > 0) {
+                const iconSize = Math.min(gridSize * 0.35, 20 / view.scale); // 图标稍小一点，为了更精致
+                const stepX = iconSize * 0.75; // 重叠步进：每次移动 75% 的身位（即重叠 25%）
+                const maxRowWidth = s; // 最大宽度不超过角色宽度
+                
+                let currentDx = 0; // 当前行的 X 偏移
+                let currentDy = 0; // Y 偏移
+                
+                // 起始位置：角色的正下方
+                const startX = t.x; 
+                const startY = t.y + s + (3 / view.scale); 
+
+                t.statuses.forEach((st) => {
+                    const def = STATUS_TYPES.find(d => d.key === st.key);
+                    if(!def) return;
+
+                    // 换行检测：如果加了这个图标会超过宽度，且不是当前行第一个
+                    if (currentDx + iconSize > maxRowWidth && currentDx > 0) {
+                        currentDx = 0;
+                        currentDy += iconSize; // 换行
+                    }
+
+                    const drawX = startX + currentDx;
+                    const drawY = startY + currentDy;
+
+                    // 1. 底圆背景
+                    ctx.beginPath(); 
+                    ctx.fillStyle = 'rgba(0,0,0,0.8)'; // 深色背景，防遮挡
+                    ctx.arc(drawX + iconSize/2, drawY + iconSize/2, iconSize/2, 0, Math.PI*2); 
+                    ctx.fill();
+
+                    // 2. 图标文字
+                    ctx.fillStyle = '#fff';
+                    ctx.textAlign = 'center'; 
+                    ctx.textBaseline = 'middle';
+                    ctx.font = `${iconSize * 0.7}px sans-serif`;
+                    ctx.fillText(def.icon, drawX + iconSize/2, drawY + iconSize/2 + (1/view.scale));
+
+                    // 3. 持续时间 (右下角金色小数字)
+                    if(st.duration > 0) {
+                        ctx.fillStyle = '#f1c40f';
+                        ctx.textAlign = 'right';
+                        ctx.textBaseline = 'bottom';
+                        ctx.font = `bold ${iconSize * 0.6}px Arial`;
+                        // 稍微画出圆圈一点点，增加辨识度
+                        ctx.fillText(st.duration, drawX + iconSize + (2/view.scale), drawY + iconSize + (2/view.scale));
+                    }
+
+                    currentDx += stepX; // 移动到下一个位置
+                });
+            }
+        });
+
+        const alpha = parseFloat(document.getElementById('fogAlpha').value);
+        if (alpha > 0) { ctx.globalAlpha = alpha; ctx.drawImage(fogCvs, 0, 0); }
+
+        // 5. 预览与测距
+        // 如果是法术模式，用真实鼠标位置预览；如果是移动/测距，用吸附位置
+        let previewPos = snappedMousePos; 
+        if ((mode.startsWith('spell') && mode !== 'spell-grid') || mode.startsWith('fog')) {
+            previewPos = s2w(lastPos.x, lastPos.y);
+        }
+
+        if (previewPos && !isMeasuring && !panning) drawPreview(previewPos);
+        
+        if (shiftDown && isMeasuring && measureStart && snappedMousePos) {
+            ctx.save();
+            ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 3 / view.scale; ctx.setLineDash([10, 5]);
+            ctx.beginPath(); ctx.moveTo(measureStart.x, measureStart.y); ctx.lineTo(snappedMousePos.x, snappedMousePos.y); ctx.stroke();
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.arc(measureStart.x, measureStart.y, 5/view.scale, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(snappedMousePos.x, snappedMousePos.y, 5/view.scale, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+        }
+
+        ctx.restore();
+    }
+
+    function drawGrid() {
+        const w = mapImg ? mapImg.width : 2000; const h = mapImg ? mapImg.height : 2000;
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1/view.scale;
+        ctx.beginPath();
+        for(let x=offX%gridSize; x<=w; x+=gridSize) { if(x<0)continue; ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+        for(let y=offY%gridSize; y<=h; y+=gridSize) { if(y<0)continue; ctx.moveTo(0, y); ctx.lineTo(w, y); }
+        ctx.stroke();
+    }
+
+    function drawPreview(pos) {
+        const size = gridSize * parseFloat(document.getElementById('brushSize').value);
+        if (mode.startsWith('spell')) {
+            const color = document.getElementById('spellColor').value;
+            ctx.fillStyle = color; ctx.globalAlpha = 0.3;
+            // 只有 spell-grid 强制吸附预览，free 模式跟随鼠标
+            if (mode === 'spell-grid') {
+                const snap = getSnapCenter(pos.x, pos.y);
+                ctx.fillRect(snap.x - size/2, snap.y - size/2, size, size);
+            } else { 
+                ctx.beginPath(); ctx.arc(pos.x, pos.y, size/2, 0, Math.PI*2); ctx.fill(); 
+            }
+        } else if (mode.startsWith('fog')) {
+            const brushPos = pos; 
+            
+            ctx.strokeStyle = mode === 'fog' ? '#fff' : '#000'; 
+            ctx.lineWidth = 2 / view.scale; 
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            
+            if (fogShape === 'circle') {
+                ctx.arc(brushPos.x, brushPos.y, size / 2, 0, Math.PI * 2);
+            } else {
+                ctx.rect(brushPos.x - size / 2, brushPos.y - size / 2, size, size);
+            }
+            ctx.stroke();
+        }
+    }
+
+    // === 交互 ===
+    let spaceDown = false; let shiftDown = false; 
+
+    window.addEventListener('keydown', e => { 
+        if(e.key === 'Shift') { 
+            if (e.repeat) return; shiftDown = true; 
+            if(selectedToken) { const s = gridSize*(selectedToken.sizeMult||1); measureStart = getSnapCenter(selectedToken.x+s/2, selectedToken.y+s/2); } 
+            else if(snappedMousePos) { measureStart = snappedMousePos; }
+            isMeasuring = true; requestRender();
+        } 
+        if(e.code==='Space') spaceDown=true; 
+    });
+    window.addEventListener('keyup', e => { 
+        if(e.key === 'Shift') { shiftDown = false; isMeasuring = false; tooltip.style.display='none'; measureStart=null; requestRender(); }
+        if(e.code==='Space') spaceDown=false; 
+    });
+    cvs.addEventListener('contextmenu', e => e.preventDefault());
+
+    cvs.addEventListener('mousedown', e => {
+        const p = s2w(e.offsetX, e.offsetY);
+        closeContextMenu(); 
+
+        if (e.button === 2) { 
+            let clickedToken = null;
+            for(let i=tokens.length-1; i>=0; i--) {
+                const t = tokens[i]; const s = gridSize*(t.sizeMult||1);
+                if(Math.hypot(p.x-(t.x+s/2), p.y-(t.y+s/2)) < s/2) { clickedToken = t; break; }
+            }
+            if(clickedToken) { openContextMenu(e.clientX, e.clientY, clickedToken); return; }
+            // 右键删除法术
+            const spellIdx = spells.findIndex(s => {
+                if(s.type === 'grid') return p.x >= s.x-s.size/2 && p.x <= s.x+s.size/2 && p.y >= s.y-s.size/2 && p.y <= s.y+s.size/2;
+                else return Math.hypot(p.x-s.x, p.y-s.y) < s.size/2;
+            });
+            if(spellIdx !== -1) { spells.splice(spellIdx, 1); requestRender(); return; }
+            return;
+        }
+
+        if(e.button === 1 || spaceDown) { panning = true; lastPos = {x:e.offsetX, y:e.offsetY}; return; }
+
+        if (mode === 'move') {
+            if (shiftDown) return; 
+            let clicked = null;
+            for(let i=tokens.length-1; i>=0; i--) {
+                const t = tokens[i]; const s = gridSize*(t.sizeMult||1);
+                if(Math.hypot(p.x-(t.x+s/2), p.y-(t.y+s/2)) < s/2) { clicked=t; break; }
+            }
+            if(clicked) { selectedToken=clicked; dragToken=clicked; updateTokenUI(); }
+            else { selectedToken=null; updateTokenUI(); panning=true; lastPos={x:e.offsetX, y:e.offsetY}; }
+            requestRender();
+        } 
+        else if (mode.startsWith('spell')) { 
+            // 【修改】如果是 Grid 模式，吸附；如果是 Free 模式，直接用 p.x, p.y
+            if (mode === 'spell-grid') {
+                const snap = getSnapCenter(p.x, p.y);
+                addSpell(snap.x, snap.y); 
+            } else {
+                addSpell(p.x, p.y);
+            }
+        }
+        else { editFog(p.x, p.y); panning = true; }
+    });
+
+    cvs.addEventListener('mousemove', e => {
+        lastPos = {x:e.offsetX, y:e.offsetY}; // 记录鼠标原始位置供预览使用
+        const rawP = s2w(e.offsetX, e.offsetY);
+        snappedMousePos = getSnapCenter(rawP.x, rawP.y); // 计算吸附点供测距使用
+
+        // 测距
+        if (shiftDown && isMeasuring && measureStart) {
+            const distPx = Math.hypot(snappedMousePos.x - measureStart.x, snappedMousePos.y - measureStart.y);
+            let ft = Math.round((distPx / gridSize) * 5); 
+            tooltip.style.left = (e.clientX + 15) + 'px'; tooltip.style.top = (e.clientY + 15) + 'px';
+            tooltip.innerText = `${ft} ft`; tooltip.style.display = 'block';
+            requestRender(); return;
+        } else { tooltip.style.display = 'none'; }
+
+        // 拖拽
+        if(dragToken) {
+            const s = gridSize*(dragToken.sizeMult||1);
+            dragToken.x = rawP.x - s/2; dragToken.y = rawP.y - s/2;
+            requestRender(); return;
+        }
+        
+        // 移动/迷雾
+        if(panning) {
+            if(mode === 'move' || spaceDown || e.buttons === 4) {
+                view.x += e.offsetX - lastPos.x; view.y += e.offsetY - lastPos.y; 
+                // 注意：这里 lastPos 已经在开头更新了，但为了平移计算的连续性，这里逻辑其实依赖上一帧
+                // 简单的平移修复：
+                // 实际上上面的 lastPos = ... 会导致这里 delta 为 0。
+                // 修正：我们不在这里用 lastPos 做差值，而是用 movementX/Y 更简单，或者改逻辑。
+                // 为了不改动太大，这里暂时用 movementX/Y 替代计算
+                view.x += e.movementX; view.y += e.movementY;
+                requestRender();
+            } else if (mode.startsWith('fog')) editFog(rawP.x, rawP.y);
+        } else {
+            requestRender();
+        }
+    });
+
+    cvs.addEventListener('mouseup', () => {
+        if(dragToken) {
+            let gx = Math.round((dragToken.x - offX)/gridSize)*gridSize + offX;
+            let gy = Math.round((dragToken.y - offY)/gridSize)*gridSize + offY;
+            dragToken.x = gx; dragToken.y = gy;
+        }
+        dragToken = null; panning = false; requestRender();
+    });
+    
+    cvs.addEventListener('wheel', e => { e.preventDefault(); const k=e.deltaY>0?0.9:1.1; const p=s2w(e.offsetX,e.offsetY); view.scale*=k; view.x=e.offsetX-p.x*view.scale; view.y=e.offsetY-p.y*view.scale; requestRender(); }, {passive:false});
+
+    // === 功能函数 (保持不变) ===
+    const menu = document.getElementById('context-menu');
+    function openContextMenu(x, y, token) {
+        rightClickToken = token;
+        if(!rightClickToken.statuses) rightClickToken.statuses = [];
+        document.getElementById('hp-current').value = rightClickToken.curHp || 0;
+        document.getElementById('hp-max').value = rightClickToken.maxHp || 0;
+        document.querySelectorAll('.status-btn').forEach(b => {
+            const key = b.dataset.key;
+            const has = rightClickToken.statuses.find(s => s.key === key);
+            if(has) b.classList.add('active'); else b.classList.remove('active');
+        });
+        if(x+260>window.innerWidth) x-=260; if(y+300>window.innerHeight) y-=300;
+        menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block';
+    }
+    function closeContextMenu() { menu.style.display = 'none'; rightClickToken = null; }
+    window.updateTokenHP = () => { if(!rightClickToken) return; const c=parseInt(document.getElementById('hp-current').value); const m=parseInt(document.getElementById('hp-max').value); if(!isNaN(c))rightClickToken.curHp=c; if(!isNaN(m))rightClickToken.maxHp=m; requestRender(); };
+    function toggleStatus(key) { 
+        if(!rightClickToken) return; 
+        
+        const list = rightClickToken.statuses; 
+        const idx = list.findIndex(s => s.key === key); 
+        
+        // 1. 修改数据
+        if(idx !== -1) {
+            list.splice(idx, 1); // 移除状态
+        } else {
+            const dur = parseInt(document.getElementById('status-duration').value) || 10;
+            list.push({ key: key, duration: dur }); // 添加状态
+        } 
+        
+        // 2. 【核心修复】立即更新按钮的颜色样式
+        const btn = document.querySelector(`.status-btn[data-key="${key}"]`);
+        if (btn) {
+            // 如果刚才找到了(idx!=-1)，说明现在是移除操作 -> 去掉高亮
+            // 如果刚才没找到，说明现在是添加操作 -> 加上高亮
+            if (idx !== -1) btn.classList.remove('active');
+            else btn.classList.add('active');
+        }
+
+        // 3. 重绘地图
+        requestRender(); 
+    }
+    window.nextRound = () => { let ch=false; tokens.forEach(t => { if(t.statuses && t.statuses.length>0) { t.statuses.forEach(s=>s.duration--); t.statuses=t.statuses.filter(s=>s.duration>0); ch=true; } }); if(ch)requestRender(); else alert("无持续状态"); };
+
+    function addSpell(x, y) {
+        const size = gridSize * parseFloat(document.getElementById('brushSize').value);
+        const color = document.getElementById('spellColor').value;
+        let s = { id:Date.now(), color, size, type: mode==='spell-grid'?'grid':'circle', x, y };
+        spells.push(s); requestRender();
+    }
+    function editFog(x, y) {
+        const size = gridSize * parseFloat(document.getElementById('brushSize').value);
+        if(mode==='fog') fogCtx.globalCompositeOperation='destination-out'; else { fogCtx.globalCompositeOperation='source-over'; fogCtx.fillStyle='black'; }
+        fogCtx.beginPath();
+        if(fogShape==='circle') fogCtx.arc(x,y,size/2,0,Math.PI*2); else fogCtx.rect(x-size/2,y-size/2,size,size);
+        fogCtx.fill(); requestRender();
+    }
+
+    // UI Helpers (保持不变)
+    window.setStep=(v)=>{ moveStep=v; document.getElementById('step-1').classList.toggle('active', v===1); document.getElementById('step-10').classList.toggle('active', v===10); document.getElementById('step-50').classList.toggle('active', v===50); };
+    window.adjOffset=(axis,dir)=>{if(axis==='x')offX+=dir*moveStep;else offY+=dir*moveStep;requestRender();};
+    window.adjGrid=(dir)=>{ gridSize = Math.max(5, gridSize + dir * moveStep); updateUI(); };
+    window.setMode=(m)=>{mode=m;document.querySelectorAll('#toolbar button').forEach(b=>b.classList.remove('active')); if(m==='move')document.getElementById('m-move').classList.add('active'); if(m==='fog')document.getElementById('m-fog').classList.add('active'); if(m==='fog-add')document.getElementById('m-add').classList.add('active'); if(m.startsWith('spell'))document.getElementById(m==='spell-grid'?'m-spell-grid':'m-spell-free').classList.add('active'); if(!m.startsWith('move')){selectedToken=null;updateTokenUI();} requestRender(); };
+    window.setShape=(s)=>{fogShape=s;document.getElementById('shape-rect').classList.toggle('active',s==='rect');document.getElementById('shape-circle').classList.toggle('active',s==='circle');requestRender();};
+    window.setTokenSize=(v)=>{if(selectedToken){selectedToken.sizeMult=v;requestRender();}};
+    window.deleteToken=()=>{if(selectedToken && confirm('删除?')){tokens=tokens.filter(t=>t!==selectedToken);selectedToken=null;updateTokenUI();requestRender();}};
+    window.clearSpells=()=>{if(confirm('清空法术?')){spells=[];requestRender();}};
+    window.updateUI=()=>{document.getElementById('gridInfo').innerText=Math.round(gridSize);document.getElementById('brushVal').innerText=document.getElementById('brushSize').value+'x';requestRender();};
+    window.updateTokenUI=()=>{document.getElementById('token-tools').classList.toggle('disabled',!selectedToken);};
+    window.resetView=()=>{if(mapImg){const s=Math.min(cvs.width/mapImg.width,cvs.height/mapImg.height)*0.9;view={scale:s,x:(cvs.width-mapImg.width*s)/2,y:(cvs.height-mapImg.height*s)/2};}requestRender();};
+    window.initFog=(f)=>{if(mapImg){fogCvs.width=mapImg.width;fogCvs.height=mapImg.height;}if(f){fogCtx.fillStyle='black';fogCtx.fillRect(0,0,fogCvs.width,fogCvs.height);}requestRender();};
+
+    // 存档系统 (保持不变)
+    window.updateSceneBar = updateSceneBar; // 确保函数可用
+    function updateSceneBar() { const bar = document.getElementById('scene-bar'); bar.innerHTML = ''; scenes.forEach((s, idx) => { const btn = document.createElement('div'); btn.className = 'scene-tab ' + (idx === activeSceneIdx ? 'active' : ''); btn.innerText = s.name; btn.onclick = () => switchScene(idx); btn.ondblclick = () => { const n = prompt("重命名:", s.name); if(n) { s.name = n; updateSceneBar(); } }; bar.appendChild(btn); }); }
+    function serializeCurrentScene() { scenes[activeSceneIdx].data = { mapSrc: mapImg ? mapImg.src : null, fogData: fogCvs.toDataURL(), tokens: JSON.parse(JSON.stringify(tokens)), tokenSrcs: tokens.map(t => t.src), spells: JSON.parse(JSON.stringify(spells)), grid: { size: gridSize, offX, offY }, view: { ...view } }; }
+    function deserializeScene(idx) { const s = scenes[idx]; const d = s.data; mapImg = null; tokens = []; spells = []; gridSize = 50; offX = 0; offY = 0; view = {x:0, y:0, scale:1}; initFog(true); if (!d) { requestRender(); return; } if(d.grid) { gridSize = d.grid.size; offX = d.grid.offX; offY = d.grid.offY; } if(d.view) view = d.view; if(d.spells) spells = d.spells; if(d.fogData) { const i = new Image(); i.onload = () => { fogCvs.width = i.width; fogCvs.height = i.height; fogCtx.clearRect(0,0,i.width,i.height); fogCtx.drawImage(i, 0, 0); requestRender(); }; i.src = d.fogData; } if(d.mapSrc) { const i = new Image(); i.onload = () => { mapImg = i; requestRender(); }; i.src = d.mapSrc; } if(d.tokens && d.tokenSrcs) { d.tokens.forEach((tData, i) => { const src = d.tokenSrcs[i]; if(src) { const img = new Image(); img.onload = () => { tokens.push({ ...tData, img: img, src: src }); requestRender(); }; img.src = src; } }); } updateUI(); }
+    window.switchScene = (newIdx) => { if (newIdx === activeSceneIdx) return; serializeCurrentScene(); activeSceneIdx = newIdx; deserializeScene(newIdx); updateSceneBar(); };
+    window.addNewScene = () => { serializeCurrentScene(); scenes.push({ id: Date.now(), name: `场景 ${scenes.length + 1}`, data: null }); activeSceneIdx = scenes.length - 1; mapImg = null; tokens = []; spells = []; gridSize = 50; offX = 0; offY = 0; view = {x:0, y:0, scale:1}; initFog(true); updateUI(); updateSceneBar(); requestRender(); };
+    window.deleteCurrentScene = () => { if(scenes.length <= 1) return; if(!confirm(`删除?`)) return; scenes.splice(activeSceneIdx, 1); activeSceneIdx = Math.max(0, activeSceneIdx - 1); deserializeScene(activeSceneIdx); updateSceneBar(); };
+    window.saveAllData = () => { serializeCurrentScene(); const d = { version: "v13.2", scenes: scenes, activeSceneIdx: activeSceneIdx }; const blob = new Blob([JSON.stringify(d)], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `dnd_campaign_${Date.now()}.json`; a.click(); };
+    document.getElementById('loadState').onchange = function(e) { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = ev => { try { const d = JSON.parse(ev.target.result); if (!d.scenes) { scenes = [{ id: Date.now(), name: "导入场景", data: { mapSrc: d.map, fogData: d.fog, tokens: d.tokens, spells: d.spells, grid: d.grid, view: d.view, tokenSrcs: d.tokens?.map(t=>t.src) } }]; activeSceneIdx = 0; } else { scenes = d.scenes; activeSceneIdx = d.activeSceneIdx || 0; } updateSceneBar(); deserializeScene(activeSceneIdx); alert(`读取成功！`); } catch(e) { alert('存档错误'); } }; r.readAsText(f); this.value=''; };
+    document.getElementById('mapUpload').onchange = function(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const i=new Image();i.onload=()=>{mapImg=i;if(!tokens.length)initFog(true);resetView();};i.src=ev.target.result;};r.readAsDataURL(f);this.value='';};
+    document.getElementById('tokenUpload').onchange=function(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const i=new Image();i.onload=()=>{let c=s2w(cvs.width/2,cvs.height/2);const t={id:Date.now(),x:c.x,y:c.y,sizeMult:1,img:i,src:ev.target.result,statuses:[],curHp:0,maxHp:0};tokens.push(t);selectedToken=t;updateTokenUI();requestRender();};i.src=ev.target.result;};r.readAsDataURL(f);this.value='';};
+
+    init();
+</script>
+</body>
+</html>
