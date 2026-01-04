@@ -31,6 +31,7 @@ Start your adventure!
 
 🎮 Controls & Usage / 操作指南
 1. Navigation / 视角控制
+
 | Action / 动作 | Control / 操作 |
 | :--- | :--- |
 | **Pan Map (平移)** | Middle Mouse Button (Hold) OR Spacebar + Left Click <br> 中键按住拖动 或 空格+左键 |
