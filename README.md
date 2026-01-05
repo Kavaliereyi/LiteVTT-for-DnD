@@ -66,11 +66,13 @@ A lightweight, single-file Virtual Tabletop (VTT) for D&D and TTRPGs. No server,
 
 * **📏 Measure / 测距** Hold **Shift** and move mouse. Distance is rounded to 5ft increments (D&D 5e style).  
   按住 **Shift** 键移动鼠标即可测距。距离以 5 尺为单位四舍五入。
-* **🔥 Spells / 法术** * **Free Mode**: Place templates anywhere for flexible positioning.  
+* **🔥 Spells / 法术** *
+* **Free Mode**: Place templates anywhere for flexible positioning.  
     **自由模式**：笔刷跟随鼠标，自由放置范围模板。
   * **Grid Mode**: Snaps to the nearest grid center.  
     **网格模式**：模板自动吸附至格点中心。
-* **🌫️ Fog of War / 战争迷雾** * **Erase (迷雾模式)**: Removes fog to reveal the map. (擦除迷雾显示地图)  
+* **🌫️ Fog of War / 战争迷雾** *
+* **Erase (迷雾模式)**: Removes fog to reveal the map. (擦除迷雾显示地图)  
   * **Add (遮盖模式)**: Restores fog to hide areas. (重新覆盖迷雾)  
   * **Shape (形状)**: Toggle between **Circle** and **Rectangle** brushes. (切换圆/方笔刷)
 
