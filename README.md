@@ -4,6 +4,8 @@ A lightweight, single-file Virtual Tabletop (VTT) for D&D and TTRPGs. No server,
 
 一个轻量级、单文件的 D&D/跑团虚拟桌面工具。无需服务器，无需安装，双击 HTML 文件即可开始。
 
+[![Watch the video]](https://www.bilibili.com/video/BV1f1ifBpEf8/?spm_id_from=333.1387.homepage.video_card.click&vd_source=c305b0b9e8480ee42248d3316022b4d7)
+
 ---
 
 ## ✨ Features / 特性
