@@ -52,7 +52,7 @@
         #context-menu h4 { margin: 0 0 8px 0; font-size: 14px; color: #ecf0f1; border-bottom: 1px solid #555; padding-bottom: 4px; }
         
         .hp-control { display: flex; gap: 5px; margin-bottom: 8px; background: #222; padding: 4px; border-radius: 4px; }
-        .hp-input-group { display: flex; flex-direction: column; width: 50%; }
+        .hp-input-group { display: flex; flex-direction: column; flex: 1; }
         .hp-input-group label { font-size: 9px; color: #aaa; }
         .hp-input-group input { background: #444; border: 1px solid #555; color: #fff; width: 100%; box-sizing: border-box; font-size: 12px; padding: 2px; }
 
@@ -71,7 +71,7 @@
         }
     </style>
 </head>
-<body>
+document.getElementById<body>
 
 <div id="toolbar">
     <div class="group">
@@ -160,6 +160,9 @@
         </div>
         <div class="hp-input-group">
             <label>最大 HP</label> <input type="number" id="hp-max" onchange="updateTokenHP()">
+        </div>
+        <div class="hp-input-group">
+            <label>先攻</label> <input type="number" id="init-val" onchange="updateTokenInit()">
         </div>
     </div>
     <div style="display:flex; align-items:center; gap:5px; margin-bottom:5px; font-size:12px; color:#ccc;">
@@ -293,6 +296,33 @@ const STATUS_TYPES = [
             if(t === selectedToken) {
                 ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 4/view.scale;
                 ctx.beginPath(); ctx.arc(t.x+s/2, t.y+s/2, s/2, 0, Math.PI*2); ctx.stroke();
+            }
+            
+            // 先攻
+            if (t.initiative !== undefined && t.initiative !== null && t.initiative !== '') {
+                const badgeSize = s * 0.3; // 徽章大小为格子的 30%
+                const bx = t.x; // 左上角 X
+                const by = t.y; // 左上角 Y
+                
+                ctx.save();
+                // 绘制背景盾牌/圆
+                ctx.beginPath();
+                ctx.fillStyle = '#ecf0f1'; // 白灰色背景
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 2 / view.scale;
+                ctx.arc(bx, by, badgeSize/2, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+
+                // 绘制数字
+                ctx.fillStyle = '#2c3e50'; // 深色文字
+                ctx.font = `bold ${badgeSize * 0.7}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(t.initiative, bx, by + (1/view.scale));
+                
+                // 绘制一个小标签 "Init" (可选，为了美观可以只留数字)
+                ctx.restore();
             }
 
             // 血条
@@ -541,6 +571,15 @@ const STATUS_TYPES = [
         if(!rightClickToken.statuses) rightClickToken.statuses = [];
         document.getElementById('hp-current').value = rightClickToken.curHp || 0;
         document.getElementById('hp-max').value = rightClickToken.maxHp || 0;
+        document.getElementById('init-val').value = rightClickToken.initiative || '';
+        window.updateTokenInit = () => {
+            if(!rightClickToken) return;
+            const val = parseFloat(document.getElementById('init-val').value);
+            // 如果输入为空或非数字，设为 null (不显示)
+            if(isNaN(val)) rightClickToken.initiative = null;
+            else rightClickToken.initiative = val;
+            requestRender();
+        };
         document.querySelectorAll('.status-btn').forEach(b => {
             const key = b.dataset.key;
             const has = rightClickToken.statuses.find(s => s.key === key);
